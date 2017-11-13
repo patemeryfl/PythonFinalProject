@@ -1,48 +1,56 @@
 import sqlite3
 import collections
-import create_dbs
+import Emery_Patrick_create_dbs
 
-from Emery_Patrick_Projec_Part1 import BaseballCSVReader, StocksCSVReader
+from Emery_Patrick_Project_Part1 import BaseballCSVReader, StocksCSVReader
 
 BASEBALL_CSV = 'MLB2008.csv'
 STOCK_CSV = 'StockValuations.csv'
 
 class AbstractDAO:
-    '''Info'''
+    '''Abstract Class
+    Parameters: Name of created database
+    Methods: Insert records into database
+             Select all and return into deque
+             Connect to passed in db and return connection'''
     def __init__(self, db_name):
         self.db_name = db_name
 
     def insert_records(self, records):
-        '''Info'''
+        '''Takes in record from csv reader, inserts into db with sql'''
         raise NotImplementedError
 
     def select_all(self):
-        '''Info'''
+        '''Selects all records and insterts them into a deque'''
         raise NotImplementedError
 
     def connect(self):
-        '''Info'''
+        '''Returns SQL connection'''
         with sqlite3.connect(self.db_name) as sql_connection:
             return sql_connection
 
 class BaseballStatsDAO(AbstractDAO):
-    '''Info'''
+    '''Inherits Abstract Class
+       Defines insert and select methods'''
     def insert_records(self, records):
-        '''takes list of records as parameter'''
+        '''Takes list of records as parameter, creates a cursor
+           loops through dictionary of records and inserts them into the database'''
         sql_connection = self.connect()
+        baseball_cursor = sql_connection.cursor()
+
         for baseball_row in records:
             player_name = baseball_row.get('PLAYER', 0)
             player_salary = baseball_row.get('SALARY', 0)
             games_played = baseball_row.get('G', 0)
             game_average = baseball_row.get('AVG', 0)
 
-            baseball_cursor = sql_connection.cursor()
             baseball_cursor.execute("INSERT INTO baseball_stats VALUES (?,?,?,?)",
                                     (player_name, games_played, game_average, player_salary))
         sql_connection.commit()
 
     def select_all(self):
-        '''Info'''
+        '''Creates deque to hold returned records,
+           executes select statement and adds returned values'''
         baseball_deque = collections.deque()
         sql_connection = self.connect()
         baseball_cursor = sql_connection.cursor()
@@ -56,10 +64,14 @@ class BaseballStatsDAO(AbstractDAO):
 
 
 class StockStatsDAO(AbstractDAO):
-    '''Info'''
+    '''Inherits Abstract Class
+       Defines insert and select methods'''
     def insert_records(self, records):
-        '''takes list of records as parameter'''
+        '''Takes list of records as parameter, creates a cursor
+           loops through dictionary of records and inserts them into the database'''
         sql_connection = self.connect()
+        stocks_cursor = sql_connection.cursor()
+
         for stock_row in records:
             company_name = stock_row.get('company_name', 0)
             ticker = stock_row.get('ticker', 0)
@@ -71,7 +83,6 @@ class StockStatsDAO(AbstractDAO):
             market_value_usd = stock_row.get('market_value_usd', 0)
             pe_ratio = stock_row.get('pe_ratio', 0)
 
-            stocks_cursor = sql_connection.cursor()
             stocks_cursor.execute("INSERT INTO stock_stats VALUES (?,?,?,?,?,?,?,?,?)",
                                   (company_name, ticker, exchange_country, price,
                                    exchange_rate, shares_outstanding, net_income,
@@ -79,7 +90,8 @@ class StockStatsDAO(AbstractDAO):
         sql_connection.commit()
 
     def select_all(self):
-        '''Info'''
+        '''Creates deque to hold returned records,
+           executes select statement and adds returned values'''
         stocks_deque = collections.deque()
         sql_connection = self.connect()
         stocks_cursor = sql_connection.cursor()
@@ -92,7 +104,7 @@ class StockStatsDAO(AbstractDAO):
         return stocks_deque
 
 if __name__ == '__main__':
-    create_dbs.create_dbs()
+    Emery_Patrick_create_dbs.create_dbs()
 
     BASEBALL_RECORDS = BaseballCSVReader(BASEBALL_CSV).load()
     BaseballStatsDAO('baseball.db').insert_records(BASEBALL_RECORDS)
@@ -103,5 +115,22 @@ if __name__ == '__main__':
     BASEBALL_DEQUE = BaseballStatsDAO('baseball.db').select_all()
     STOCKS_DEQUE = StockStatsDAO('stocks.db').select_all()
 
+    TICKERS_PER_EXCHANGE = collections.defaultdict(list)
+    for stock_entries in STOCKS_DEQUE:
+        tickers = stock_entries[1]
+        exchange_countries = stock_entries[2]
 
+        TICKERS_PER_EXCHANGE[exchange_countries].append(tickers)
+    for country, ticker in TICKERS_PER_EXCHANGE.items():
+        print('Country:', country, ' Total:', len(ticker))
 
+    SALARY_PER_AVERAGE = collections.defaultdict(list)
+    for baseball_entries in BASEBALL_DEQUE:
+        batting_averages = baseball_entries[2]
+        salaries = baseball_entries[3]
+
+        SALARY_PER_AVERAGE[batting_averages].append(salaries)
+
+    for average, salary in SALARY_PER_AVERAGE.items():
+        average_salary = sum(salary) / len(salary)
+        print('Average:', round(average, 3), 'Salary:', '${:,.2f}'.format(average_salary))
