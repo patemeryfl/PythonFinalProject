@@ -38,7 +38,7 @@ class StockStatRecord(AbstractRecord):
         super().__init__(name)
         self.exchange_country = exchange_country
         self.company_name = company_name
-        self.price = float(price)
+        self.price = price
         self.exchange_rate = exchange_rate
         self.shares_outstanding = shares_outstanding
         self.net_income = net_income
@@ -62,11 +62,16 @@ class AbstractCSVReader:
         '''Takes in a csv file and uses with to open it
            Reads CSV into dictionary and passes each row in the
            csv file to the row_to_record method of the class that called it'''
+        records = []
         with open(self.csv_file, 'r') as csv_input_data:
             csv_reader = csv.DictReader(csv_input_data)
             for individual_row in csv_reader:
-                csv_row_data = self.row_to_record(individual_row)
-        return csv_row_data
+                try:
+                    csv_record = self.row_to_record(individual_row)
+                    records.append(csv_record)
+                except BadDataError:
+                    pass
+        return records
 
 class BaseballCSVReader(AbstractCSVReader):
     '''Class Docstring'''
@@ -79,67 +84,56 @@ class BaseballCSVReader(AbstractCSVReader):
             for column_name, row_value in csv_row.items():
                 if not column_name or not row_value:
                     raise BadDataError
-            self.valid_baseball_rows.append(csv_row)
+
+            return BaseballStatRecord(
+                csv_row['PLAYER'],
+                int(csv_row['SALARY']),
+                float(csv_row['AVG']),
+                int(csv_row['G'])
+            )
         except BadDataError:
-            raise BadDataError
-        return self.valid_baseball_rows
+            pass
 
 class StocksCSVReader(AbstractCSVReader):
     '''Inherits Abstract Reader, initializes list of validated row items'''
-    valid_stock_rows = []
 
     def row_to_record(self, csv_row):
         '''Calculates net income, market value and price/exchange ratio'''
+        for column_name, row_value in csv_row.items():
+            if not column_name or not row_value:
+                raise BadDataError
         try:
-            for column_name, row_value in csv_row.items():
-                if not column_name or not row_value:
-                    raise BadDataError
-                else:
-                    try:
-                        price = float(csv_row.get('price', 0))
-                        shares_outstanding = float(csv_row.get('shares_outstanding', 0))
-                        exchange_rate = float(csv_row.get('exchange_rate', 0))
-                        net_income = float(csv_row.get('net_income', 0))
-
-                        market_value_usd = price * exchange_rate * shares_outstanding
-                        if net_income == 0:
-                            raise BadDataError
-                        else:
-                            pe_ratio = price / net_income
-                    except ValueError:
-                        raise BadDataError
-            csv_row.update({'market_value_usd':market_value_usd})
-            csv_row.update({'pe_ratio':pe_ratio})
-            self.valid_stock_rows.append(csv_row)
+            price = float(csv_row['price'])
+            exchange_rate = float(csv_row['exchange_rate'])
+            shares_outstanding = float(csv_row['shares_outstanding'])
+            net_income = float(csv_row['net_income'])
+            market_value_usd = price * exchange_rate * shares_outstanding
+            if net_income > 0:
+                pe_ratio = price / net_income
+            else:
+                pe_ratio = 0
+            return StockStatRecord(
+                csv_row['ticker'],
+                csv_row['exchange_country'],
+                csv_row['company_name'],
+                price,
+                exchange_rate,
+                shares_outstanding,
+                net_income,
+                market_value_usd,
+                pe_ratio
+            )
+        except ValueError:
+            raise BadDataError
         except BadDataError:
             pass
-        return self.valid_stock_rows
 
 if __name__ == "__main__":
-    BASEBALL_DATA = BaseballCSVReader(BASEBALL_CSV).load()
-    STOCK_DATA = StocksCSVReader(STOCK_CSV).load()
+    BASEBALL_RECORDS = BaseballCSVReader(BASEBALL_CSV).load()
+    STOCK_RECORDS = StocksCSVReader(STOCK_CSV).load()
 
-    for baseball_row in BASEBALL_DATA:
-        player_name = baseball_row.get('PLAYER', 0)
-        player_salary = baseball_row.get('SALARY', 0)
-        games_played = baseball_row.get('G', 0)
-        game_average = baseball_row.get('AVG', 0)
-        record = BaseballStatRecord(player_name, player_salary, games_played, game_average)
+    for record in BASEBALL_RECORDS:
         print(record)
-        print_baseball = []
 
-    for stock_row in STOCK_DATA:
-        stock_ticker = stock_row.get('ticker', 0)
-        stock_exchange_country = stock_row.get('exchange_country', 0)
-        stock_company_name = stock_row.get('company_name', 0)
-        stock_price = stock_row.get('price', 0)
-        stock_exchange_rate = stock_row.get('exchange_rate', 0)
-        stock_shares_outstanding = stock_row.get('shares_outstanding', 0)
-        stock_net_income = stock_row.get('net_income', 0)
-        stock_market_value_usd = stock_row.get('market_value_usd', 0)
-        stock_pe_ratio = stock_row.get('pe_ratio', 0)
-
-        record = StockStatRecord(stock_ticker, stock_exchange_country, stock_company_name,\
-        stock_price, stock_exchange_rate, stock_shares_outstanding, stock_net_income,\
-        stock_market_value_usd, stock_pe_ratio)
+    for record in STOCK_RECORDS:
         print(record)

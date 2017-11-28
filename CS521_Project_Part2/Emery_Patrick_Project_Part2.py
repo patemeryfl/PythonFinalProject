@@ -32,6 +32,9 @@ class AbstractDAO:
 class BaseballStatsDAO(AbstractDAO):
     '''Inherits Abstract Class
        Defines insert and select methods'''
+    def __init__(self):
+        super().__init__('baseball.db')
+
     def insert_records(self, records):
         '''Takes list of records as parameter, creates a cursor
            loops through dictionary of records and inserts them into the database'''
@@ -39,12 +42,12 @@ class BaseballStatsDAO(AbstractDAO):
         baseball_cursor = sql_connection.cursor()
 
         for baseball_row in records:
-            player_name = baseball_row.get('PLAYER', 0)
-            player_salary = baseball_row.get('SALARY', 0)
-            games_played = baseball_row.get('G', 0)
-            game_average = baseball_row.get('AVG', 0)
+            player_name = baseball_row.name
+            player_salary = baseball_row.salary
+            games_played = baseball_row.games
+            game_average = baseball_row.average
 
-            baseball_cursor.execute("INSERT INTO baseball_stats VALUES (?,?,?,?)",
+            baseball_cursor.execute("INSERT or ignore INTO baseball_stats VALUES (?,?,?,?)",
                                     (player_name, games_played, game_average, player_salary))
         sql_connection.commit()
 
@@ -66,6 +69,9 @@ class BaseballStatsDAO(AbstractDAO):
 class StockStatsDAO(AbstractDAO):
     '''Inherits Abstract Class
        Defines insert and select methods'''
+    def __init__(self):
+        super().__init__('stocks.db')
+
     def insert_records(self, records):
         '''Takes list of records as parameter, creates a cursor
            loops through dictionary of records and inserts them into the database'''
@@ -73,18 +79,18 @@ class StockStatsDAO(AbstractDAO):
         stocks_cursor = sql_connection.cursor()
 
         for stock_row in records:
-            company_name = stock_row.get('company_name', 0)
-            ticker = stock_row.get('ticker', 0)
-            exchange_country = stock_row.get('exchange_country', 0)
-            price = stock_row.get('price', 0)
-            exchange_rate = stock_row.get('exchange_rate', 0)
-            shares_outstanding = stock_row.get('shares_outstanding', 0)
-            net_income = stock_row.get('net_income', 0)
-            market_value_usd = stock_row.get('market_value_usd', 0)
-            pe_ratio = stock_row.get('pe_ratio', 0)
+            company_name = stock_row.company_name
+            stock_ticker = stock_row.name
+            exchange_country = stock_row.exchange_country
+            price = stock_row.price
+            exchange_rate = stock_row.exchange_rate
+            shares_outstanding = stock_row.shares_outstanding
+            net_income = stock_row.net_income
+            market_value_usd = stock_row.market_value_usd
+            pe_ratio = stock_row.pe_ratio
 
-            stocks_cursor.execute("INSERT INTO stock_stats VALUES (?,?,?,?,?,?,?,?,?)",
-                                  (company_name, ticker, exchange_country, price,
+            stocks_cursor.execute("INSERT or ignore INTO stock_stats VALUES (?,?,?,?,?,?,?,?,?)",
+                                  (company_name, stock_ticker, exchange_country, price,
                                    exchange_rate, shares_outstanding, net_income,
                                    market_value_usd, pe_ratio))
         sql_connection.commit()
@@ -104,17 +110,21 @@ class StockStatsDAO(AbstractDAO):
         return stocks_deque
 
 if __name__ == '__main__':
+    #Create the database tables using create_db module
     Emery_Patrick_create_dbs.create_dbs()
 
+    #Call the load method of the external CSV readers, pass returned record into insert statement
     BASEBALL_RECORDS = BaseballCSVReader(BASEBALL_CSV).load()
-    BaseballStatsDAO('baseball.db').insert_records(BASEBALL_RECORDS)
-
+    BaseballStatsDAO().insert_records(BASEBALL_RECORDS)
     STOCK_RECORDS = StocksCSVReader(STOCK_CSV).load()
-    StockStatsDAO('stocks.db').insert_records(STOCK_RECORDS)
+    StockStatsDAO().insert_records(STOCK_RECORDS)
 
-    BASEBALL_DEQUE = BaseballStatsDAO('baseball.db').select_all()
-    STOCKS_DEQUE = StockStatsDAO('stocks.db').select_all()
+    #Return a deque with all of the records returned by the select all method
+    BASEBALL_DEQUE = BaseballStatsDAO().select_all()
+    STOCKS_DEQUE = StockStatsDAO().select_all()
 
+    #Create a default dictionary to maintain similar countries
+    #Use length of matched values to determine number of tickers
     TICKERS_PER_EXCHANGE = collections.defaultdict(list)
     for stock_entries in STOCKS_DEQUE:
         tickers = stock_entries[1]
@@ -124,6 +134,8 @@ if __name__ == '__main__':
     for country, ticker in TICKERS_PER_EXCHANGE.items():
         print('Country:', country, ' Total:', len(ticker))
 
+    #Create a default dictionary to maintain similar salaries
+    #Extract salary and avg and perform calculation, not repeating any salaries
     SALARY_PER_AVERAGE = collections.defaultdict(list)
     for baseball_entries in BASEBALL_DEQUE:
         batting_averages = baseball_entries[2]
